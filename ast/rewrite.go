@@ -1727,6 +1727,8 @@ func AlterAffectTable(stmt sqlparser.Statement) string {
 func MergeAlterTables(sqls ...string) map[string]string {
 	alterSQLs := make(map[string][]string)
 	mergedAlterStr := make(map[string]string)
+	// 用于存储非 ALTER 语句的映射
+    nonAlterSQLs := make(map[string][]string)
 
 	// table/column/index name can be quoted in back ticks
 	backTicks := "(`[^\\s]*`)"
@@ -1782,6 +1784,9 @@ func MergeAlterTables(sqls ...string) map[string]string {
 					common.Log.Warn("rename not match: ALTER %v %v", tableName, sql)
 				}
 			default:
+                // 对于所有其他类型的语句，直接添加到 nonAlterSQLs
+                key := "non_alter"
+                nonAlterSQLs[key] = append(nonAlterSQLs[key], sql)
 			}
 		}
 
@@ -1796,6 +1801,11 @@ func MergeAlterTables(sqls ...string) map[string]string {
 	for k, v := range alterSQLs {
 		mergedAlterStr[k] = fmt.Sprintln("ALTER TABLE", k, strings.Join(v, ", "), common.Config.Delimiter)
 	}
+
+	 // 将非 ALTER 语句添加到最终输出
+	 for k, v := range nonAlterSQLs {
+        mergedAlterStr[k] = fmt.Sprintln(strings.Join(v, ";\n"), common.Config.Delimiter)
+    }
 	return mergedAlterStr
 }
 
