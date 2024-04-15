@@ -1799,7 +1799,7 @@ func MergeAlterTables(sqls ...string) map[string]string {
 		}
 	}
 	for k, v := range alterSQLs {
-		mergedAlterStr[k] = fmt.Sprintln("ALTER TABLE", k, strings.Join(v, ", "), common.Config.Delimiter)
+		mergedAlterStr[k] = fmt.Sprintln("ALTER TABLE", k, "\n\t", strings.Join(v, ", \n\t"), common.Config.Delimiter)
 	}
 
 	 // 将非 ALTER 语句添加到最终输出
