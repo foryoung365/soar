@@ -1724,11 +1724,11 @@ func AlterAffectTable(stmt sqlparser.Statement) string {
 // MergeAlterTables mergealter: 将同一张表的多条 ALTER 语句合成一条 ALTER 语句
 // @input: sql, alter string
 // @output: [[db.]table]sql, 如果找不到 DB，key 为表名；如果找得到 DB，key 为 db.table
-func MergeAlterTables(sqls ...string) map[string]string {
+func MergeAlterTables(sqls ...string) []string {
 	alterSQLs := make(map[string][]string)
-	mergedAlterStr := make(map[string]string)
+	var mergedAlterStr []string
 	// 用于存储非 ALTER 语句的映射
-    nonAlterSQLs := make(map[string][]string)
+    nonAlterSQLs := make([]string, 0)
 
 	// table/column/index name can be quoted in back ticks
 	backTicks := "(`[^\\s]*`)"
@@ -1738,6 +1738,8 @@ func MergeAlterTables(sqls ...string) map[string]string {
 	// CREATE [UNIQUE|FULLTEXT|SPATIAL|PRIMARY] [KEY|INDEX] idx_name ON tbl_name
 	createIndexExp := regexp.MustCompile(`(?i)create((unique)|(fulltext)|(spatial)|(primary)|(\s*)\s*)((index)|(key))\s*`)
 	indexNameExp := regexp.MustCompile(`(?i)(` + backTicks + `|([^\s]*))\s*`)
+
+	order := []string{} // 用于记录表的处理顺序
 
 	for _, sql := range sqls {
 		sql = strings.Trim(sql, common.Config.Delimiter)
@@ -1785,29 +1787,42 @@ func MergeAlterTables(sqls ...string) map[string]string {
 				}
 			default:
                 // 对于所有其他类型的语句，直接添加到 nonAlterSQLs
-                key := "non_alter"
-                nonAlterSQLs[key] = append(nonAlterSQLs[key], sql)
+                nonAlterSQLs = append(nonAlterSQLs, sql)
 			}
 		}
 
 		if alterSQL != "" && tableName != "" && tableName != "dual" {
+			key := ""
 			if dbName == "" {
-				alterSQLs["`"+tableName+"`"] = append(alterSQLs["`"+tableName+"`"], alterSQL)
+				key = "`" + tableName + "`"
 			} else {
-				alterSQLs["`"+dbName+"`.`"+tableName+"`"] = append(alterSQLs["`"+dbName+"`.`"+tableName+"`"], alterSQL)
+				key = "`" + dbName + "`.`" + tableName + "`"
 			}
+
+			if _, exists := alterSQLs[key]; !exists {
+				order = append(order, key)
+			}
+			alterSQLs[key] = append(alterSQLs[key], alterSQL)
 		}
 	}
-	for k, v := range alterSQLs {
-		mergedAlterStr[k] = fmt.Sprintln("ALTER TABLE", k, "\n\t", strings.Join(v, ", \n\t"), common.Config.Delimiter)
+
+	// 将非 ALTER 语句添加到最终输出
+	for _, sql := range nonAlterSQLs {
+		mergedAlterStr = append(mergedAlterStr, fmt.Sprintln(sql, common.Config.Delimiter))
 	}
 
-	 // 将非 ALTER 语句添加到最终输出
-	 for k, v := range nonAlterSQLs {
-        mergedAlterStr[k] = fmt.Sprintln(strings.Join(v, ";\n"), common.Config.Delimiter)
-    }
+	// 按顺序合并 ALTER 语句
+	for _, k := range order {
+		v := alterSQLs[k]
+		for i := range v {
+			v[i] = strings.Trim(v[i], " \t\n\r")
+		}
+		mergedAlterStr = append(mergedAlterStr, fmt.Sprintln("ALTER TABLE", k, "\n\t", strings.Join(v, ", \n\t"), common.Config.Delimiter))
+	}
+
 	return mergedAlterStr
 }
+
 
 // RewriteRuleMatch 检查重写规则是否生效
 func RewriteRuleMatch(name string) bool {
