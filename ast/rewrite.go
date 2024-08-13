@@ -20,10 +20,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/pingcap/parser/ast"
 	"reflect"
 	"regexp"
 	"strings"
+
+	"github.com/pingcap/parser/ast"
 
 	"github.com/XiaoMi/soar/common"
 
@@ -1728,7 +1729,7 @@ func MergeAlterTables(sqls ...string) []string {
 	alterSQLs := make(map[string][]string)
 	var mergedAlterStr []string
 	// 用于存储非 ALTER 语句的映射
-    nonAlterSQLs := make([]string, 0)
+	nonAlterSQLs := make([]string, 0)
 
 	// table/column/index name can be quoted in back ticks
 	backTicks := "(`[^\\s]*`)"
@@ -1781,13 +1782,15 @@ func MergeAlterTables(sqls ...string) []string {
 					alterSQL = fmt.Sprint(alterExp.ReplaceAllString(sql, ""))
 				} else if renameExp.MatchString(sql) {
 					common.Log.Debug("rename renameExp: ALTER %v %v", tableName, alterExp.ReplaceAllString(sql, ""))
-					alterSQL = fmt.Sprint(alterExp.ReplaceAllString(sql, ""))
+					//alterSQL = fmt.Sprint(alterExp.ReplaceAllString(sql, ""))
+					//不处理，放入nonAlterSQLs
+					nonAlterSQLs = append(nonAlterSQLs, sql)
 				} else {
 					common.Log.Warn("rename not match: ALTER %v %v", tableName, sql)
 				}
 			default:
-                // 对于所有其他类型的语句，直接添加到 nonAlterSQLs
-                nonAlterSQLs = append(nonAlterSQLs, sql)
+				// 对于所有其他类型的语句，直接添加到 nonAlterSQLs
+				nonAlterSQLs = append(nonAlterSQLs, sql)
 			}
 		}
 
@@ -1822,7 +1825,6 @@ func MergeAlterTables(sqls ...string) []string {
 
 	return mergedAlterStr
 }
-
 
 // RewriteRuleMatch 检查重写规则是否生效
 func RewriteRuleMatch(name string) bool {
